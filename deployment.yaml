@@ -1,4 +1,3 @@
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,6 +14,6 @@ spec:
     spec:
       containers:
         - name: seleniumtestdemoapp
-          image: nisha1310/sample2026:seleniumtestimage
+          image: nisha1310/week12-registration:v1
           ports:
-            - containerPort: 5000
+            - containerPort: 5002
