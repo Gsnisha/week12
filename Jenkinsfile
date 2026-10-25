@@ -1,61 +1,80 @@
+
 pipeline {
     agent any
-   
+
     stages {
-
-        stage('Run Selenium Tests with pytest') {
+        stage('Install Dependencies') {
             steps {
-                    echo "Running Selenium Tests using pytest"
+                sh '''
+                    python3 -m venv .venv
+                    .venv/bin/python -m pip install -r requirements.txt
+                '''
+            }
+        }
 
-                    // Install Python dependencies
-                    bat 'pip install -r requirements.txt'
+        stage('Run Selenium Tests') {
+            steps {
+                sh '''
+                    set -e
+                    .venv/bin/python app.py > flask.log 2>&1 &
+                    APP_PID=$!
+                    trap 'kill $APP_PID 2>/dev/null || true' EXIT
 
-                    //  Start Flask app in background
-                    bat 'start /B python app.py'
+                    for i in $(seq 1 30); do
+                        if curl -fsS http://127.0.0.1:5002/ >/dev/null; then
+                            break
+                        fi
+                        sleep 2
+                    done
 
-                    // Wait a few seconds for the server to start
-                    bat 'ping 127.0.0.1 -n 5 > nul'
-
-                    // Run tests using pytest
-                    
-                    bat 'python -m pytest -v'
+                    curl -fsS http://127.0.0.1:5002/ >/dev/null
+                    .venv/bin/python -m pytest -v tests/test_registrationapp.py
+                '''
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                echo "Build Docker Image"
-                bat "docker build -t seleniumdemoapp:v1 ."
+                sh 'docker build -t nisha1310/week12-registration:v1 .'
             }
         }
-        stage('Docker Login') {
+
+        stage('Push to Docker Hub') {
             steps {
-                  bat 'docker login -u sumayyasadaf -p Sumayya@123'
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USERNAME',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )]) {
+                    sh '''
+                        set +x
+                        echo "$DOCKER_PASSWORD" | docker login \
+                            -u "$DOCKER_USERNAME" --password-stdin
+                        docker push nisha1310/week12-registration:v1
+                        docker logout
+                    '''
                 }
             }
-        stage('push Docker Image to Docker Hub') {
+        }
+
+        stage('Deploy to Kubernetes') {
             steps {
-                echo "push Docker Image to Docker Hub"
-                bat "docker tag seleniumdemoapp:v1 sumayyasadaf/sample2026:seleniumtestimage"               
-                    
-                bat "docker push sumayyasadaf/sample2026:seleniumtestimage"
-                
+                sh '''
+                    kubectl apply -f deployment.yaml
+                    kubectl apply -f service.yaml
+                    kubectl rollout status deployment/seleniumtestdemoapp-deployment \
+                        --timeout=120s
+                '''
             }
         }
-        stage('Deploy to Kubernetes') { 
-            steps { 
-                    // apply deployment & service 
-                    bat 'kubectl apply -f deployment.yaml --validate=false' 
-                    bat 'kubectl apply -f service.yaml' 
-            } 
-        }
     }
+
     post {
         success {
-            echo 'Pipeline completed successfully!'
+            echo 'Week 12 pipeline completed successfully!'
         }
         failure {
-            echo 'Pipeline failed. Please check the logs.'
+            echo 'Pipeline failed. Check Console Output.'
         }
     }
 }
