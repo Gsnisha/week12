@@ -1,0 +1,20 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: seleniumtestdemoapp-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: seleniumtestdemoapp
+  template:
+    metadata:
+      labels:
+        app: seleniumtestdemoapp
+    spec:
+      containers:
+        - name: seleniumtestdemoapp
+          image: nisha1310/sample2026:seleniumtestimage
+          ports:
+            - containerPort: 5000
